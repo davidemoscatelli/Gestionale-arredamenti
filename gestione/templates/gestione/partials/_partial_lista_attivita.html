@@ -1,0 +1,26 @@
+{% load humanize %}
+
+<div id="lista-attivita-container">
+    
+    {% if attivita_lista %}
+        <ul class="list-group list-group-flush" id="lista-attivita">
+        {% for att in attivita_lista %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ att.descrizione }}</strong>
+                    <small class="d-block text-muted">
+                        {{ att.data_attivita|date:"d M Y" }} - 
+                        Loggato da: {{ att.eseguita_da.username|default:"Sistema" }}
+                        {% if att.categoria %}
+                            <span class="badge bg-light text-dark border ms-1">{{ att.categoria.nome }}</span>
+                        {% endif %}
+                    </small>
+                </div>
+                <span class="badge bg-secondary rounded-pill">{{ att.tempo_dedicato_ore|floatformat:1 }} h</span>
+            </li>
+        {% endfor %}
+        </ul>
+    {% else %}
+        <p class="text-center text-muted mt-3">Nessuna attività registrata.</p>
+    {% endif %}
+</div>

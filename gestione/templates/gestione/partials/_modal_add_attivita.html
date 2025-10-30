@@ -1,0 +1,26 @@
+{% load bootstrap5 %}
+
+<form hx-post="{% url 'add_attivita' trattativa.id %}" 
+      hx-target="#modal-container-content">
+    {% csrf_token %}
+    
+    <div class="modal-header">
+        <h5 class="modal-title">Logga Nuova Attività</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    
+    <div class="modal-body">
+        <p>Registra il tempo speso per **{{ trattativa.titolo }}**.</p>
+        
+        {% bootstrap_form attivita_form_errors|default:attivita_form %}
+        
+        <p class="text-muted small mt-3">
+            L'attività sarà registrata a nome tuo ({{ request.user.username }}).
+        </p>
+    </div>
+    
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+        <button type="submit" class="btn btn-primary">Salva Attività</button>
+    </div>
+</form>

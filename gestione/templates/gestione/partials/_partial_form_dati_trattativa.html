@@ -1,0 +1,18 @@
+{% load bootstrap5 %}
+
+<!-- 
+  Questo partial contiene solo il form (e i suoi wrapper)
+  per permettere ad HTMX di sostituirlo in caso di successo o errore.
+-->
+<form id="form-dati-trattativa"
+      hx-post="{% url 'update_dati_trattativa' trattativa.id %}"
+      hx-target="#form-dati-trattativa"
+      hx-swap="outerHTML">
+    {% csrf_token %}
+    <div class="card-body">
+        {% bootstrap_form form_dati %}
+    </div>
+    <div class="card-footer text-end">
+        <button type="submit" class="btn btn-primary btn-sm">Salva Modifiche Dati</button>
+    </div>
+</form>

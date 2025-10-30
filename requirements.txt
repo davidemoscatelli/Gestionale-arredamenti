@@ -1,0 +1,4 @@
+django
+django-bootstrap-v5
+django-htmx
+openpyxl

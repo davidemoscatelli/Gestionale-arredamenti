@@ -1,0 +1,31 @@
+{% extends 'gestione/base.html' %}
+{% load bootstrap5 %}
+
+{% block title %}Nuova Trattativa{% endblock %}
+
+{% block content %}
+<div class="container pt-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-md-10">
+            <div class="card">
+                <div class="card-header">
+                    <h1 class="h4 mb-0">Crea Nuova Trattativa</h1>
+                </div>
+                <div class="card-body">
+                    <p class="card-text text-muted">Inserisci i dettagli iniziali della nuova opportunità. Lo stato iniziale sarà "Lead/Contatto".</p>
+                    <hr>
+                    <form method="POST" novalidate>
+                        {% csrf_token %}
+                        {% bootstrap_form form %}
+                        
+                        <div class="mt-4 d-flex justify-content-end">
+                            <a href="{% url 'kanban_board' %}" class="btn btn-secondary me-2">Annulla</a>
+                            {% bootstrap_button button_type="submit" content="Salva Trattativa" button_class="btn-primary" %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

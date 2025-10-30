@@ -1,0 +1,23 @@
+{% load bootstrap5 %}
+
+<!-- Questo è solo il *contenuto* del modal -->
+<form hx-post="{% url 'chiudi_trattativa_modal' trattativa.id %}" hx-target="#modal-container-content">
+    {% csrf_token %}
+    
+    <div class="modal-header">
+        <h5 class="modal-title">Chiudi Trattativa: {{ trattativa.titolo }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    </div>
+    
+    <div class="modal-body">
+        <p>Stai per spostare questa trattativa in "Vinto". Inserisci i dati finali della vendita. I costi materiali e il valore saranno usati come default.</p>
+        
+        {% bootstrap_form form %}
+        
+    </div>
+    
+    <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+        <button type="submit" class="btn btn-success">Salva e Chiudi Trattativa</button>
+    </div>
+</form>

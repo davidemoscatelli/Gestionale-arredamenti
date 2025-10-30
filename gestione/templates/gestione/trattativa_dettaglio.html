@@ -1,0 +1,198 @@
+{% extends 'gestione/base.html' %}
+{% load bootstrap5 %}
+{% load humanize %}
+{% load tz %}
+
+{% block title %}Dettaglio: {{ trattativa.titolo }}{% endblock %}
+
+{% block extra_head_css %}
+<style>
+    .discussion-container { 
+        display: flex;
+        flex-direction: column;
+        height: 65vh; 
+        background-color: #fff;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    .discussion-messages { 
+        flex-grow: 1;
+        overflow-y: auto; 
+        padding: 1rem 1.5rem; 
+    }
+    .discussion-message { 
+        margin-bottom: 1.5rem;
+        max-width: 100%; 
+        clear: both; 
+    }
+    .discussion-message .message-header { 
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.3rem;
+    }
+    .discussion-message strong {
+        font-size: 0.9rem; 
+        color: #343a40; 
+        margin-right: 0.5rem;
+    }
+    .discussion-message small {
+        font-size: 0.75rem; 
+        color: #adb5bd;
+    }
+    .discussion-message p {
+        margin-bottom: 0;
+        padding: 0.7rem 1rem; 
+        background-color: #f8f9fa; 
+        border: 1px solid #dee2e6; 
+        border-radius: 0.5rem; 
+        display: inline-block; 
+        text-align: left;
+        max-width: 100%; 
+        word-wrap: break-word; 
+    }
+    
+    .discussion-form { 
+        padding: 1rem 1.5rem;
+        border-top: 1px solid #dee2e6;
+    }
+    /* Stili form attività */
+     #form-add-attivita .form-label { display: none; }
+    #lista-attivita-container .list-group-item { border-left: 0; border-right: 0; padding-left: 0; padding-right: 0; }
+    #lista-attivita-container .list-group-item:first-child { border-top: 0; }
+    #lista-attivita-container .list-group-item:last-child { border-bottom: 0; }
+    
+    .input-group.input-group-sm .form-control,
+    .input-group.input-group-sm .btn {
+        height: calc(1.5em + .5rem + 2px);
+        padding-top: .25rem;
+        padding-bottom: .25rem;
+        font-size: .875rem;
+    }
+    .discussion-form .form-control { height: auto; }
+    .discussion-form .btn { height: calc(1.5em + .75rem + 2px); }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container pt-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <a href="{% url 'kanban_board' %}" class="btn btn-outline-secondary btn-sm mb-2">
+                <i class="bi bi-arrow-left"></i> Torna al Kanban
+            </a>
+            <h1 class="h3 mb-0">{{ trattativa.titolo }}</h1>
+            <p class="lead text-muted">{{ trattativa.cliente_nome }}</p>
+        </div>
+        <div>
+            <span class="badge bg-primary fs-6">
+                {{ trattativa.get_stato_display|cut:"1. "|cut:"2. "|cut:"3. "|cut:"4. "|cut:"5. "|cut:"6. "|cut:"7. "|cut:"8. " }}
+            </span>
+        </div>
+    </div>
+    
+    <hr class="mb-4">
+
+    <div class="row">
+        
+        <div class="col-lg-7 mb-4">
+            
+            <div class="card mb-4">
+                <div class="card-header">Dati Trattativa</div>
+                <form id="form-dati-trattativa" method="POST">
+                    {% csrf_token %}
+                    <div class="card-body">
+                        {% bootstrap_form form_dati %}
+                    </div>
+                    <div class="card-footer text-end">
+                        <button type="submit" class="btn btn-primary btn-sm">Salva Modifiche Dati</button>
+                    </div>
+                </form>
+            </div>
+            
+            <div class="card mb-4" id="analisi-economica">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    Analisi Economica Stimata
+                    {% if trattativa.valore_stimato > 0 %}
+                        {% if margine_stimato_perc < 20 %}
+                            <span class="badge bg-danger">Margine Basso</span>
+                        {% elif margine_stimato_perc < 40 %}
+                            <span class="badge bg-warning text-dark">Margine Medio</span>
+                        {% else %}
+                            <span class="badge bg-success">Margine Buono</span>
+                        {% endif %}
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <ul class="list-group list-group-flush">
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Valore Vendita (A)</span>
+                            <strong class="fs-5">€ {{ trattativa.valore_stimato|floatformat:2|intcomma }}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Costo Materiali (B)</span>
+                            <span class="text-danger">(-) € {{ trattativa.costo_materiali_stimato|floatformat:2|intcomma }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Costo Personale (C)</span>
+                            <span class="text-danger">(-) € {{ costo_personale_trattativa|floatformat:2|intcomma }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                            <strong>Margine Lordo Stimato (A-B-C)</strong>
+                            <strong class="fs-5 text-primary">€ {{ margine_stimato_euro|floatformat:2|intcomma }}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                            <strong>Marginalità %</strong>
+                            <strong class="fs-5 text-primary">{{ margine_stimato_perc|floatformat:2 }} %</strong>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    Log Attività
+                    <button class="btn btn-primary btn-sm"
+                            hx-get="{% url 'add_attivita' trattativa.id %}"
+                            hx-target="#modal-container-content">
+                        <i class="bi bi-plus-lg"></i> Aggiungi Attività
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="lista-attivita-container">
+                        {% include 'gestione/partials/_partial_lista_attivita.html' %}
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+
+        <div class="col-lg-5">
+            <div class="discussion-container"> 
+                <div class="card-header bg-white">Discussione Interna</div> 
+                <div class="discussion-messages" id="lista-messaggi-container"> 
+                    {% include 'gestione/partials/_partial_lista_messaggi.html' %}
+                </div>
+                
+                <form hx-post="{% url 'add_messaggio' trattativa.id %}"
+                      hx-target="#lista-messaggi-container" 
+                      hx-swap="beforeend" 
+                      hx-on::after-request="this.reset(); document.getElementById('lista-messaggi-container').scrollTop = document.getElementById('lista-messaggi-container').scrollHeight;">
+                    {% csrf_token %}
+                    <div class="input-group discussion-form">
+                        <textarea name="{{ chat_form.messaggio.name }}" 
+                                  class="form-control" 
+                                  rows="2" 
+                                  placeholder="Aggiungi un commento..."
+                                  id="{{ chat_form.messaggio.id_for_label }}" required></textarea>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-plus-lg"></i> Aggiungi
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+    </div> </div> {% endblock %}

@@ -1,0 +1,82 @@
+{% extends 'gestione/base.html' %}
+{% load bootstrap5 %}
+{% load humanize %} 
+
+{% block title %}Report Venditori - Gestione Arredo{% endblock %}
+
+{% block content %}
+
+<div class="container pt-4">
+
+    <div class="card bg-light mb-4">
+        <div class="card-body">
+            <form method="GET" action="{% url 'report_venditori' %}" class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <label for="anno" class="form-label">Anno</label>
+                    <select name="anno" id="anno" class="form-select">
+                        <option value="">-- Tutti --</option>
+                        {% for date in available_years %}
+                            <option value="{{ date.year }}" {% if date.year == selected_year %}selected{% endif %}>
+                                {{ date.year }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="mese" class="form-label">Mese</label>
+                    <select name="mese" id="mese" class="form-select">
+                        <option value="">-- Tutto l'anno --</option>
+                        {% for mese in available_months %}
+                            <option value="{{ mese }}" {% if mese == selected_month %}selected{% endif %}>
+                                {{ mese }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4" style="margin-top: 2.3rem;">
+                    <button type="submit" class="btn btn-primary me-2">Filtra</button>
+                    <a href="{% url 'report_venditori' %}" class="btn btn-secondary">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <h1 class="mb-4 h4">Report Venditori: <span class="text-primary">{{ filter_title }}</span></h1>
+
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Venditore</th>
+                        <th class="text-end">Vendite (€)</th>
+                        <th class="text-end">Margine (€)</th>
+                        <th class="text-end">Margine (%)</th>
+                        <th class="text-end">Nr. Vendite</th>
+                        <th class="text-end">Scontrino Medio (€)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in sales_report %}
+                    <tr>
+                        <td>
+                            <strong>{{ v.first_name }} {{ v.last_name }}</strong>
+                            <small class="d-block text-muted">@{{ v.username }}</small>
+                        </td>
+                        <td class="text-end">€ {{ v.tot_venduto|floatformat:2|intcomma }}</td>
+                        <td class="text-end">€ {{ v.margine_euro|floatformat:2|intcomma }}</td>
+                        <td class="text-end">{{ v.margine_perc|floatformat:2 }} %</td>
+                        <td class="text-end">{{ v.num_vendite }}</td>
+                        <td class="text-end">€ {{ v.scontrino_medio|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center">Nessuna vendita registrata per questo periodo.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div> {% endblock %}

@@ -1,0 +1,11 @@
+{% load humanize %}
+{% load tz %}
+
+<!-- Questo è solo UN messaggio da aggiungere alla lista (per lo swap 'beforeend') -->
+<div class="discussion-message {% if msg.utente == request.user %}me{% endif %}"> 
+    <div class="message-header">
+        <strong>{{ msg.utente.username|default:"Utente Eliminato" }}</strong>
+        <small>{{ msg.timestamp|timezone:"Europe/Rome"|naturaltime }}</small>
+    </div>
+    <p>{{ msg.messaggio|linebreaksbr }}</p>
+</div>

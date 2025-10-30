@@ -1,0 +1,42 @@
+{% load humanize %}
+
+<!-- 
+  Questo partial viene ricaricato da HTMX. 
+  hx-swap-oob="true" lo ricarica anche quando si aggiunge un'attività.
+-->
+<div class="card mb-4" id="analisi-economica" {% if hx_swap_oob %}hx-swap-oob="true"{% endif %}>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        Analisi Economica Stimata
+        {% if margine_stimato_perc < 20 %}
+            <span class="badge bg-danger">Margine Basso</span>
+        {% elif margine_stimato_perc < 40 %}
+            <span class="badge bg-warning text-dark">Margine Medio</span>
+        {% else %}
+            <span class="badge bg-success">Margine Buono</span>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>Valore Vendita (A)</span>
+                <strong class="fs-5">€ {{ trattativa.valore_stimato|floatformat:2|intcomma }}</strong>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>Costo Materiali (B)</span>
+                <span class="text-danger">(-) € {{ trattativa.costo_materiali_stimato|floatformat:2|intcomma }}</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <span>Costo Personale (C)</span>
+                <span class="text-danger">(-) € {{ costo_personale_trattativa|floatformat:2|intcomma }}</span>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                <strong>Margine Lordo Stimato (A-B-C)</strong>
+                <strong class="fs-5 text-primary">€ {{ margine_stimato_euro|floatformat:2|intcomma }}</strong>
+            </li>
+            <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+                <strong>Marginalità %</strong>
+                <strong class="fs-5 text-primary">{{ margine_stimato_perc|floatformat:2 }} %</strong>
+            </li>
+        </ul>
+    </div>
+</div>

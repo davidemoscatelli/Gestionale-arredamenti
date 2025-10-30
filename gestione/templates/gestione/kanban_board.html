@@ -1,0 +1,140 @@
+{% extends 'gestione/base.html' %}
+{% load bootstrap5 %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Kanban Trattative{% endblock %}
+
+{% block extra_head_css %}
+<style>
+    /* ... (CSS Kanban: scrollbar, layout, card, fab, badge impatto, media query) ... */
+    .kanban-board::-webkit-scrollbar { height: 8px; }
+    .kanban-board::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .kanban-board::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+    .kanban-board::-webkit-scrollbar-thumb:hover { background: #aaa; }
+    .kanban-board { display: block; padding-bottom: 20px; }
+    .kanban-column { width: 100%; margin-bottom: 1.5rem; display: flex; flex-direction: column; }
+    .kanban-column-header { padding: 0 0.5rem 0.75rem 0.5rem; font-weight: 600; font-size: 0.85rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+    .kanban-cards-list { min-height: 100px; flex-grow: 1; max-height: 75vh; overflow-y: auto; padding: 8px; border-radius: 8px; background-color: #f8f9fa; }
+    .kanban-cards-list::-webkit-scrollbar { width: 6px; }
+    .kanban-cards-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+    .kanban-cards-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
+    .kanban-drop-zone { min-height: 10px; flex-grow: 1; }
+    .kanban-card { background-color: #ffffff; border-radius: 0.5rem; padding: 1rem 1.25rem; cursor: grab; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); transition: box-shadow 0.2s ease; margin-bottom: 1rem; border: none; }
+    .kanban-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+    .kanban-card-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; color: #111827; }
+    .kanban-card-subtitle { color: #6c757d; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; }
+    .kanban-card-subtitle i { font-size: 0.9rem; margin-right: 6px; }
+    .kanban-card-value { font-size: 1rem; font-weight: 500; margin-bottom: 1rem; color: #111827; }
+    .kanban-card-details-button { font-size: 0.85rem; font-weight: 600; color: #6c757d; text-decoration: none; }
+    .kanban-card-details-button:hover { color: #0d6efd; }
+    .kanban-card-details-button i { margin-right: 4px; }
+    .sortable-ghost { opacity: 0.4; background: #e2e6ea; border-radius: 0.5rem; border: 2px dashed #0d6efd; }
+    .task-done { opacity: 0.6; background-color: #f8f9fa; }
+    .task-done .kanban-card-title { text-decoration: line-through; color: #6c757d; }
+    .fab-container { position: fixed; bottom: 30px; right: 30px; z-index: 100; }
+    .fab { width: 60px; height: 60px; border-radius: 50%; background-color: #0d6efd; color: white; font-size: 28px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: background-color 0.2s; }
+    .fab:hover { background-color: #0b5ed7; color: white; }
+    .impact-badge { font-size: 0.75rem; font-weight: 600; padding: 0.3em 0.6em; }
+    @media (min-width: 992px) {
+        .kanban-board { display: flex; overflow-x: auto; gap: 1.5rem; align-items: flex-start; }
+        .kanban-column { min-width: 320px; max-width: 320px; flex-shrink: 0; width: auto; margin-bottom: 0; max-height: 85vh; }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<div class="container-fluid pt-4 px-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <ul class="nav nav-pills">
+            <li class="nav-item">
+                <a class="nav-link {% if active_page == 'kanban' %}active{% endif %}" aria-current="page" href="{% url 'kanban_board' %}"><i class="bi bi-kanban-fill"></i> Kanban</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_page == 'lista' %}active{% endif %}" href="{% url 'trattativa_lista' %}"><i class="bi bi-list-ul"></i> Lista</a>
+            </li>
+        </ul>
+        <div>
+            <a href="{% url 'esporta_trattative_excel' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-download"></i> Esporta Excel</a>
+        </div>
+    </div>
+
+    <div class="kanban-board" id="kanban-board">
+        {% for colonna in colonne %}
+        <div class="kanban-column">
+            
+            <div class="kanban-column-header">
+                <span>{{ colonna.stato_display|cut:"1. "|cut:"2. "|cut:"3. "|cut:"4. "|cut:"5. "|cut:"6. "|cut:"7. "|cut:"8. " }}</span>
+                <span class="badge bg-light text-dark border rounded-pill float-end">{{ colonna.trattative|length }}</span>
+            </div>
+            
+            <div class="kanban-cards-list"
+                 id="col-{{ colonna.stato_key }}"
+                 data-stato="{{ colonna.stato_key }}" 
+                 hx-post="{% url 'move_trattativa' %}" 
+                 hx-trigger="end" 
+                 hx-params="id, stato">
+            
+                {% for trattativa in colonna.trattative %}
+                <div class="kanban-card {% if trattativa.stato == 'VINTO' or trattativa.stato == 'PERSO' %}task-done{% endif %}" 
+                     id="trattativa-{{ trattativa.id }}" data-id="{{ trattativa.id }}">
+                    
+                    <div class="kanban-card-title">{{ trattativa.titolo }}</div>
+                    
+                    <div class="kanban-card-subtitle">
+                        <i class="bi bi-person-badge"></i> {{ trattativa.cliente_nome }}
+                    </div>
+                    
+                    <div class="kanban-card-value">
+                        € {{ trattativa.valore_stimato|floatformat:0|intcomma }}
+                    </div>
+
+                    <div>
+                        {% if trattativa.stato != 'VINTO' and trattativa.stato != 'PERSO' %}
+                            <div>
+                                <a href="{% url 'trattativa_dettaglio' trattativa.id %}" class="kanban-card-details-button">
+                                    <i class="bi bi-chat-dots"></i> Dettagli
+                                </a>
+                            </div>
+                            <div class="mt-2 text-end"> 
+                                {% if trattativa.valore_stimato > 0 %}
+                                    {% with perc=trattativa.margine_stimato_perc %}
+                                        {% if perc < 20 %}
+                                            <span class="badge bg-danger impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                        {% elif perc < 40 %}
+                                            <span class="badge bg-warning text-dark impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                        {% else %}
+                                            <span class="badge bg-success impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                        {% endif %}
+                                    {% endwith %}
+                                {% else %}
+                                    <span class="badge bg-light text-dark border impact-badge">N/D</span>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="mt-2 text-end">
+                                {% if trattativa.valore_stimato > 0 %}
+                                    <span class="badge bg-light text-dark border impact-badge">Margine: {{ trattativa.margine_stimato_perc|floatformat:1 }}%</span>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                </div>
+                {% endfor %}
+                <div class="kanban-drop-zone"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="fab-container">
+        <a href="{% url 'nuova_trattativa' %}" class="fab">
+            +
+        </a>
+    </div>
+
+</div> {% endblock %}

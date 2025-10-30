@@ -1,0 +1,19 @@
+{% load humanize %}
+{% load tz %}
+
+<!-- Blocco intero per HTMX -->
+<div id="lista-discussione-container"> 
+    {% if messaggi_chat %}
+        {% for msg in messaggi_chat %}
+            <div class="discussion-message {% if msg.utente == request.user %}me{% endif %}"> 
+                <div class="message-header">
+                    <strong>{{ msg.utente.username|default:"Utente Eliminato" }}</strong>
+                    <small>{{ msg.timestamp|timezone:"Europe/Rome"|naturaltime }}</small>
+                </div>
+                <p>{{ msg.messaggio|linebreaksbr }}</p>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-center text-muted mt-3">Nessun commento. Inizia la discussione!</p>
+    {% endif %}
+</div>

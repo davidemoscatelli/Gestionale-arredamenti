@@ -1,0 +1,45 @@
+{% load bootstrap5 %}
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Gestione Arredo</title>
+    {% bootstrap_css %}
+</head>
+<body class="bg-light">
+
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-6 col-lg-4">
+                
+                <h2 class="text-center mb-4">Gestione Trattative</h2>
+                
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <h5 class="card-title text-center mb-4">Accedi</h5>
+
+                        {% if form.errors %}
+                            <div class="alert alert-danger" role="alert">
+                                Nome utente o password non validi. Riprova.
+                            </div>
+                        {% endif %}
+
+                        <form method="post" action="{% url 'login' %}">
+                            {% csrf_token %}
+                            {% bootstrap_form form %}
+                            <div class="d-grid mt-4">
+                                {% bootstrap_button button_type="submit" content="Accedi" button_class="btn-primary" %}
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    {% bootstrap_javascript %}
+</body>
+</html>

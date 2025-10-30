@@ -1,0 +1,210 @@
+{% load bootstrap5 %}
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gestione Arredo{% endblock %}</title>
+    
+    {% bootstrap_css %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+
+    {% block extra_head_css %}{% endblock %}
+    
+    <style>
+        body { background-color: #FFFFFF; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif; display: flex; flex-direction: column; min-height: 100vh; padding-top: 5rem; }
+        .navbar { box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); }
+        main { flex-grow: 1; padding-top: 1.5rem; padding-bottom: 3rem; }
+        .card { border: none; box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075); margin-bottom: 1.5rem; }
+        .card-header { background-color: #fff; border-bottom: 1px solid #dee2e6; font-weight: 600; }
+        .h4, h4 { font-weight: 500; }
+        .table { font-size: 0.9rem; }
+        footer { flex-shrink: 0; }
+    </style>
+
+</head>
+<body class="bg-white">
+    
+    <nav class="navbar navbar-expand-lg navbar-light bg-white border-bottom fixed-top">
+         <div class="container-fluid px-4"> 
+            <a class="navbar-brand" href="{% url 'dashboard' %}"><strong>Gestione Trattative</strong></a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'kanban' %}active{% endif %}" 
+                           href="{% url 'kanban_board' %}">Kanban</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'dashboard' %}active{% endif %}" 
+                           href="{% url 'dashboard' %}">Dashboard KPI</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'venditori' %}active{% endif %}" 
+                           href="{% url 'report_venditori' %}">Report Venditori</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'report_attivita' %}active{% endif %}" 
+                           href="{% url 'report_attivita' %}">Report Attività</a>
+                    </li>
+                     <li class="nav-item">
+                        <a class="nav-link {% if active_page == 'statistiche_mensili' %}active{% endif %}"
+                           href="{% url 'statistiche_mensili' %}">Statistiche Mensili</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto align-items-center">
+                    <li class="nav-item me-2">
+                        <a class="btn btn-primary btn-sm"
+                           href="{% url 'nuova_trattativa' %}">
+                           + Nuova Trattativa
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle me-1"></i> {{ user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
+                            <li><a class="dropdown-item" href="/admin/">Amministrazione</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container-fluid" id="messages-container">
+            {% bootstrap_messages %}
+        </div>
+        {% block content %}
+        {% endblock %}
+    </main>
+
+    <div class="modal fade" id="htmx-modal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+          <div class="modal-content" id="modal-container-content">
+          </div>
+      </div>
+    </div>
+
+    <div class="container-fluid">
+        <footer class="text-center text-muted mt-5 border-top pt-3 pb-3">
+            <small>&copy; {% now "Y" %} Arredo Gest</small>
+        </footer>
+    </div>
+
+    {% bootstrap_javascript %}
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const htmxModalEl = document.getElementById('htmx-modal');
+            const modal = htmxModalEl ? new bootstrap.Modal(htmxModalEl) : null;
+            
+            // 1. Inizializza Sortable (Drag-and-Drop)
+            const kanbanLists = document.querySelectorAll('.kanban-cards-list'); 
+            if (kanbanLists.length > 0 && typeof Sortable !== 'undefined') { 
+                kanbanLists.forEach(list => { 
+                    new Sortable(list, { 
+                        group: 'kanban',
+                        animation: 150,
+                        ghostClass: 'sortable-ghost',
+                        draggable: '.kanban-card', 
+                        onEnd: function(evt) {
+                            const trattativaId = evt.item.dataset.id;
+                            const nuovoStato = evt.to.dataset.stato;
+                            if (nuovoStato === 'VINTO') {
+                                evt.from.appendChild(evt.item); 
+                                htmx.ajax('GET', `/trattativa/${trattativaId}/chiudi/`, '#modal-container-content');
+                            } else {
+                                evt.to.setAttribute('hx-vals', `{"id": "${trattativaId}", "stato": "${nuovoStato}"}`);
+                                htmx.trigger(evt.to, 'end');
+                            }
+                        }
+                    });
+                });
+            }
+
+            // 2. Gestione eventi HTMX per i Modal
+            if (htmxModalEl) {
+                 // CORREZIONE: Ascolta su 'document.body' per catturare l'evento
+                 htmx.on(document.body, 'htmx:afterOnLoad', function(evt) {
+                    
+                    // Controlla se l'evento è avvenuto DENTRO il nostro modal
+                    const targetId = evt.detail.target.id;
+                    if (targetId === 'modal-container-content') {
+
+                        // Evento 1: Il form è stato caricato (GET)
+                        if (evt.detail.requestConfig.verb === 'get') {
+                            if (modal) modal.show(); // MOSTRA IL MODAL ORA
+                        }
+                        
+                        // Evento 2: Il form è stato inviato (POST) con successo
+                        if (evt.detail.xhr.status === 204 && evt.detail.requestConfig.verb === 'post') {
+                            if (modal) modal.hide();
+                            
+                            if (evt.detail.xhr.getResponseHeader('HX-Refresh') === 'true') {
+                                window.location.reload();
+                                return;
+                            }
+                            
+                            const triggerHeader = evt.detail.xhr.getResponseHeader('HX-Trigger');
+                            if (triggerHeader) {
+                                try {
+                                    const triggers = JSON.parse(triggerHeader);
+                                    if (triggers.trattativaChiusa) {
+                                        const trattativaId = triggers.trattativaChiusa.trattativaId;
+                                        const card = document.getElementById(`trattativa-${trattativaId}`);
+                                        if (card) { card.remove(); }
+                                        htmx.ajax('GET', '/', {target: '#messages-container', swap: 'innerHTML'});
+                                    }
+                                } catch (e) { console.error("Errore parsing HX-Trigger:", e); }
+                            }
+                        }
+                    }
+                });
+                
+                // Pulisci il modal quando viene nascosto
+                htmxModalEl.addEventListener('hidden.bs.modal', function () {
+                    document.getElementById('modal-container-content').innerHTML = `
+                        <div class="modal-body text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Caricamento...</span>
+                            </div>
+                        </div>`;
+                });
+            }
+
+            // 3. Gestione Scroll Chat e Aggiornamento Costi
+            const chatMessages = document.getElementById('lista-messaggi-container');
+            if(chatMessages) {
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            htmx.on(document.body, 'htmx:afterSwap', function(evt) {
+                if (evt.detail.target.id === 'lista-messaggi-container' && chatMessages) {
+                     chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+                if (evt.detail.trigger === 'refreshAnalisi') {
+                    const analisiEl = document.getElementById('analisi-economica');
+                    if(analisiEl) { htmx.ajax('GET', analisiEl.getAttribute('hx-get'), {target: '#analisi-economica'}); }
+                }
+            });
+             htmx.on(document.body, 'htmx:afterRequest', function(evt) {
+                if (evt.detail.target.id === 'lista-messaggi-container' && evt.detail.requestConfig.swapStyle === 'beforeend') {
+                    if(chatMessages) {
+                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
