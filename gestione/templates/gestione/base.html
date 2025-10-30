@@ -109,6 +109,10 @@
             const htmxModalEl = document.getElementById('htmx-modal');
             const modal = htmxModalEl ? new bootstrap.Modal(htmxModalEl) : null;
             
+            // --- INIZIO MODIFICHE DRAG-AND-DROP E CLICK ---
+            
+            let isDragging = false; // Flag per distinguere click da drag
+
             // 1. Inizializza Sortable (Drag-and-Drop)
             const kanbanLists = document.querySelectorAll('.kanban-cards-list'); 
             if (kanbanLists.length > 0 && typeof Sortable !== 'undefined') { 
@@ -118,7 +122,14 @@
                         animation: 150,
                         ghostClass: 'sortable-ghost',
                         draggable: '.kanban-card', 
+                        
+                        onStart: function() { // Imposta il flag quando inizia il trascinamento
+                            isDragging = true;
+                        },
+                        
                         onEnd: function(evt) {
+                            isDragging = false; // Resetta il flag alla fine
+                            
                             const trattativaId = evt.item.dataset.id;
                             const nuovoStato = evt.to.dataset.stato;
                             if (nuovoStato === 'VINTO') {
@@ -133,7 +144,26 @@
                 });
             }
 
-            // 2. Gestione eventi HTMX per i Modal
+            // 2. Aggiungi il Click per i dettagli (QUESTO È NUOVO)
+            const kanbanCards = document.querySelectorAll('.kanban-card');
+            kanbanCards.forEach(card => {
+                card.addEventListener('click', function(e) {
+                    // Se l'utente ha appena finito di trascinare, non fare nulla
+                    if (isDragging) {
+                        return;
+                    }
+                    
+                    const trattativaId = card.dataset.id;
+                    if (trattativaId) {
+                        // Reindirizza alla pagina di dettaglio
+                        window.location.href = `/trattativa/${trattativaId}/`;
+                    }
+                });
+            });
+            
+            // --- FINE MODIFICHE ---
+
+            // 3. Gestione eventi HTMX per i Modal (codice precedente, era #2)
             if (htmxModalEl) {
                  // CORREZIONE: Ascolta su 'document.body' per catturare l'evento
                  htmx.on(document.body, 'htmx:afterOnLoad', function(evt) {
@@ -183,14 +213,14 @@
                 });
             }
 
-            // 3. Gestione Scroll Chat e Aggiornamento Costi
+            // 4. Gestione Scroll Chat e Aggiornamento Costi (codice precedente, era #3)
             const chatMessages = document.getElementById('lista-messaggi-container');
             if(chatMessages) {
                 chatMessages.scrollTop = chatMessages.scrollHeight;
             }
             htmx.on(document.body, 'htmx:afterSwap', function(evt) {
                 if (evt.detail.target.id === 'lista-messaggi-container' && chatMessages) {
-                     chatMessages.scrollTop = chatMessages.scrollHeight;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
                 }
                 if (evt.detail.trigger === 'refreshAnalisi') {
                     const analisiEl = document.getElementById('analisi-economica');
@@ -198,7 +228,7 @@
                 }
             });
              htmx.on(document.body, 'htmx:afterRequest', function(evt) {
-                if (evt.detail.target.id === 'lista-messaggi-container' && evt.detail.requestConfig.swapStyle === 'beforeend') {
+                if (evt.detail.target.id === 'lista-messages-container' && evt.detail.requestConfig.swapStyle === 'beforeend') {
                     if(chatMessages) {
                         chatMessages.scrollTop = chatMessages.scrollHeight;
                     }

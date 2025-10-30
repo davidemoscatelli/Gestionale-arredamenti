@@ -1,3 +1,5 @@
+# gestione/views.py
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.db import models 
@@ -6,7 +8,8 @@ from django.db.models.functions import TruncMonth, Coalesce
 from decimal import Decimal
 from .models import (
     Vendita, CategoriaMerceologica, CategoriaServizio, StatMensile, Budget, 
-    Trattativa, Attivita, MessaggioChat, ProfiloUtente
+    Trattativa, Attivita, MessaggioChat, ProfiloUtente,
+    ImpostazioniGenerali, RuoloCosto # Assicurati che RuoloCosto sia importato
 )
 import datetime
 from django.contrib.auth.models import User
@@ -29,49 +32,51 @@ ALERT_SOGLIA_GIORNI_EVASIONE = 60
 ALERT_SOGLIA_RESI_DIFETTI = 5
 ALERT_SOGLIA_FINAN_NON_APPROV = 3
 
-# --- Funzioni Helper per Costi (Robuste) ---
+# --- FUNZIONI HELPER (BASATE SU RUOLO) ---
 def get_costo_attivita_query():
+    """
+    Ritorna un'espressione SQL per calcolare il costo delle attività.
+    Logica: Ore * costo_orario del Ruolo.
+    """
     return Sum(
-        F('tempo_dedicato_ore') * Coalesce(
-            F('eseguita_da__profiloutente__costo_orario'), 
-            Decimal(25.00)
-        ),
+        F('tempo_dedicato_ore') * Coalesce(F('ruolo__costo_orario'), Decimal(0.0)),
         output_field=DecimalField()
     )
+
 def get_costo_personale_trattativa(trattativa_id):
+    """Calcola il costo totale del personale per una singola trattativa."""
     costo = Attivita.objects.filter(
         trattativa_id=trattativa_id
     ).aggregate(
         costo_totale=Coalesce(get_costo_attivita_query(), Decimal(0.0))
     )['costo_totale']
     return costo
+
 def get_costo_personale_query():
+    """
+    Ritorna un'espressione SQL per calcolare il costo aggregato.
+    """
     return Sum(
-        F('attivita__tempo_dedicato_ore') * Coalesce(
-            F('attivita__eseguita_da__profiloutente__costo_orario'), 
-            Decimal(25.00)
-        ),
+        F('attivita__tempo_dedicato_ore') * Coalesce(F('attivita__ruolo__costo_orario'), Decimal(0.0)),
         output_field=DecimalField()
     )
     
+# --- FINE FUNZIONI HELPER ---
+
+
 # --- NUOVA FUNZIONE HELPER (PUNTO 19) ---
 def get_trattative_annotate():
-    """
-    Ritorna il queryset base delle trattative con tutti i calcoli
-    di costo e margine annotati (PRODOTTO + SERVIZI).
-    """
     tutte_le_trattative = Trattativa.objects.all().select_related('commerciale')
 
     # 1. Annotiamo il costo del personale (da Attività)
     trattative_con_costi = tutte_le_trattative.annotate(
         costo_personale_totale=Coalesce(
             Sum(
-                F('attivita__tempo_dedicato_ore') * Coalesce(F('attivita__eseguita_da__profiloutente__costo_orario'), Decimal(25.00)),
+                F('attivita__tempo_dedicato_ore') * Coalesce(F('attivita__ruolo__costo_orario'), Decimal(0.0)),
                 output_field=DecimalField()
             ),
             Decimal(0.0) 
         ),
-        # 2. Annotiamo il ricavo dei servizi (da Attività)
         ricavo_servizi_totale=Coalesce(
             Sum('attivita__prezzo_vendita_attivita'),
             Decimal(0.0)
@@ -80,14 +85,9 @@ def get_trattative_annotate():
 
     # 3. Annotiamo il margine e la percentuale
     trattative_con_margine = trattative_con_costi.annotate(
-        # Valore Totale = Valore Prodotto + Ricavo Servizi
         valore_totale_stimato=F('valore_stimato') + F('ricavo_servizi_totale'),
-        # Costo Totale = Costo Prodotto + Costo Personale
         costo_totale_stimato=F('costo_materiali_stimato') + F('costo_personale_totale'),
-        
-        # Margine = (Valore Totale) - (Costo Totale)
         margine_stimato_euro=F('valore_totale_stimato') - F('costo_totale_stimato'),
-        
         margine_stimato_perc=Case(
             When(valore_totale_stimato=0, then=Value(Decimal(0.0))),
             default=ExpressionWrapper(
@@ -102,11 +102,7 @@ def get_trattative_annotate():
 
 @login_required 
 def dashboard(request):
-    """
-    Dashboard con KPI automatici (MODIFICATA PUNTO 19)
-    """
-    
-    # --- 0. Gestione Filtri ---
+    # ... (Il resto della vista dashboard è invariato) ...
     selected_year = request.GET.get('anno'); selected_month = request.GET.get('mese')
     vendite_qs = Vendita.objects.all(); trattative_qs = Trattativa.objects.all(); stats_qs = StatMensile.objects.all()
     filter_title = "Totale Complessivo"; is_filtered = False
@@ -117,10 +113,8 @@ def dashboard(request):
         vendite_qs = vendite_qs.filter(data_vendita__month=selected_month); trattative_qs = trattative_qs.filter(data_creazione__month=selected_month); stats_qs = stats_qs.filter(mese=selected_month)
         filter_title = f"{selected_month}/{selected_year}"; is_filtered = True
 
-    # --- 1. KPI ECONOMICI CONSUNTIVI (filtrati su Vendite) ---
     trattative_vinte_nel_periodo = Trattativa.objects.filter(vendita_collegata__in=vendite_qs)
     
-    # Calcolo Ricavi Prodotti (dalle Vendite)
     aggregati_vendite = vendite_qs.aggregate(
         tot_venduto_prodotti=Coalesce(Sum('prezzo_vendita'), Decimal(0)),
         tot_costo_prodotti=Coalesce(Sum('costo_acquisto'), Decimal(0)),
@@ -129,7 +123,6 @@ def dashboard(request):
         numero_resi=Coalesce(Count('id', filter=Q(flag_reso=True)), 0)
     )
     
-    # Calcolo Ricavi e Costi Servizi (dalle Attività collegate)
     aggregati_servizi = Attivita.objects.filter(
         trattativa__in=trattative_vinte_nel_periodo
     ).aggregate(
@@ -137,9 +130,8 @@ def dashboard(request):
         costo_personale_periodo=Coalesce(get_costo_attivita_query(), Decimal(0.0))
     )
     
-    # KPI Economici Aggregati
     vendite_totali = aggregati_vendite['tot_venduto_prodotti'] + aggregati_servizi['tot_venduto_servizi']
-    costi_totali_cogs = aggregati_vendite['tot_costo_prodotti'] # Solo costo materiali
+    costi_totali_cogs = aggregati_vendite['tot_costo_prodotti'] 
     margine_lordo_euro = vendite_totali - costi_totali_cogs
     
     margine_totale_percent = Decimal(0)
@@ -150,12 +142,10 @@ def dashboard(request):
     perc_finanziamenti = Decimal(0)
     if numero_vendite > 0: perc_finanziamenti = (aggregati_vendite['numero_finanziamenti'] / Decimal(numero_vendite)) * 100
     
-    # --- CORREZIONE KPI: % Incidenza Servizi ---
     perc_incidenza_servizi = Decimal(0)
     if vendite_totali > 0:
         perc_incidenza_servizi = (aggregati_servizi['tot_venduto_servizi'] / vendite_totali) * 100
 
-    # --- 2. KPI OPERATIVI E CALCOLO EBIT (filtrati) ---
     costi_manuali = stats_qs.aggregate(
         tot_fissi=Coalesce(Sum('costi_operativi_fissi'), Decimal(0)),
         tot_marketing=Coalesce(Sum('costo_marketing_mese'), Decimal(0)),
@@ -167,7 +157,6 @@ def dashboard(request):
     costi_operativi_totali = costi_fissi_periodo + costo_personale_periodo + costi_manuali['tot_marketing']
     utile_operativo_ebit = margine_lordo_euro - costi_operativi_totali
 
-    # --- 3. KPI OPERATIVI AUTOMATIZZATI (filtrati su Trattative) ---
     aggregati_trattative = trattative_qs.aggregate(
         lead_generati=Count('id'),
         preventivi_persi=Count('id', filter=Q(stato=Trattativa.STATO_PERSO))
@@ -195,13 +184,11 @@ def dashboard(request):
     if numero_vendite > 0:
         costo_medio_montaggio = costo_montaggio / Decimal(numero_vendite)
 
-    # --- 4. ANALISI PER CATEGORIA (Ora su CategoriaMerceologica) ---
     budget_lookup = {}
     if selected_year and selected_month:
         budget_qs = Budget.objects.filter(anno=selected_year, mese=selected_month)
         for b in budget_qs: budget_lookup[b.categoria_id] = {'vendite': b.obiettivo_vendite_euro, 'margine_perc': b.obiettivo_margine_percentuale}
     
-    # Mostra solo Categorie Merceologiche
     categorie_summary_qs = CategoriaMerceologica.objects.annotate(
         tot_venduto=Coalesce(Sum('vendita__prezzo_vendita', filter=Q(vendita__in=vendite_qs)), Decimal(0)),
         tot_costo=Coalesce(Sum('vendita__costo_acquisto', filter=Q(vendita__in=vendite_qs)), Decimal(0))
@@ -229,14 +216,12 @@ def dashboard(request):
     if aggregati_vendite['numero_resi'] > ALERT_SOGLIA_RESI_DIFETTI: alerts.append({'level': 'danger', 'message': f"Aumento Resi/Difetti: {aggregati_vendite['numero_resi']} casi rilevati"})
     if costi_manuali['tot_finan_respinti'] > ALERT_SOGLIA_FINAN_NON_APPROV: alerts.append({'level': 'info', 'message': f"Finanziamenti non approvati in aumento: {costi_manuali['tot_finan_respinti']} casi"})
 
-    # --- 5. PREPARAZIONE DATI GRAFICO (Aggiornato) ---
     chart_labels, chart_data_vendite, chart_data_margine, chart_data_ebit = [], [], [], []
     if not is_filtered:
         today = timezone.now().date(); start_date = today - datetime.timedelta(days=365)
         stats_costs_q = StatMensile.objects.filter(anno=OuterRef('month__year'), mese=OuterRef('month__month'))
         stats_costs_fissi = stats_costs_q.values('costi_operativi_fissi'); stats_costs_mktg = stats_costs_q.values('costo_marketing_mese')
         
-        # 1. Ricavi Prodotti (da Vendita)
         trend_prodotti = Vendita.objects.filter(data_vendita__gte=start_date).annotate(month=TruncMonth('data_vendita')).values('month').annotate(
             tot_venduto_prod=Coalesce(Sum('prezzo_vendita'), Decimal(0)), 
             tot_costo_prod=Coalesce(Sum('costo_acquisto'), Decimal(0)), 
@@ -244,7 +229,6 @@ def dashboard(request):
             costi_mktg=Coalesce(Subquery(stats_costs_mktg[:1]), Decimal(0))
         ).order_by('month')
         
-        # 2. Ricavi e Costi Servizi (da Attivita)
         trend_servizi = Attivita.objects.filter(
             trattativa__vendita_collegata__data_vendita__gte=start_date
         ).annotate(
@@ -254,7 +238,6 @@ def dashboard(request):
             costo_personale=Coalesce(get_costo_attivita_query(), Decimal(0.0))
         ).order_by('month')
         
-        # Dizionari per unire i dati
         prodotti_dict = {d['month']: d for d in trend_prodotti}
         servizi_dict = {s['month']: s for s in trend_servizi}
         all_months = sorted(list(set(prodotti_dict.keys()) | set(servizi_dict.keys())))
@@ -269,7 +252,7 @@ def dashboard(request):
             vendite_mese = vendite_prodotti + vendite_servizi
             
             costo_prodotti = data_prod.get('tot_costo_prod', Decimal(0))
-            margine_mese = vendite_totali - costo_prodotti # Margine Lordo
+            margine_mese = vendite_mese - costo_prodotti
             
             costi_fissi_mese = data_prod.get('costi_fissi', Decimal(0))
             costo_mktg_mese = data_prod.get('costi_mktg', Decimal(0))
@@ -282,23 +265,21 @@ def dashboard(request):
             chart_data_margine.append(float(margine_mese))
             chart_data_ebit.append(float(ebit_mese))
 
-    # --- 6. KPI PIPELINE (Aggiornato) ---
-    stati_attivi = [Trattativa.STATO_LEAD, Trattativa.STATO_APPUNTAMENTO, Trattativa.STATO_PROGETTAZIONE, Trattativa.STATO_PREVENTIVO, Trattativa.STATO_CONSEGNA, Trattativa.STATO_MONTAGGIO]
-    pipeline_attiva_qs = get_trattative_annotate().filter(stato__in=stati_attivi) # Usa la query helper
+    stati_attivi = [Trattativa.STATO_LEAD, Trattativa.STATO_APPUNTAMENTO, Trattativa.STATO_PROGETTAZIONE, Trattativa.STATO_PREVENTIVO, Trattativa.STATO_CONSEGNA, Trattativa.STATO_MONTAGGIO] 
+    pipeline_attiva_qs = get_trattative_annotate().filter(stato__in=stati_attivi) 
     
     pipeline_aggregati = pipeline_attiva_qs.aggregate(
-        valore_totale=Coalesce(Sum('valore_totale_stimato'), Decimal(0)), # Usa il nuovo valore totale
+        valore_totale=Coalesce(Sum('valore_totale_stimato'), Decimal(0)), 
         numero_trattative=Count('id'),
         costo_personale_loggato=Coalesce(Sum('costo_personale_totale'), Decimal(0))
     )
     pipeline_valore = pipeline_aggregati['valore_totale']
     pipeline_numero = pipeline_aggregati['numero_trattative']
-    pipeline_costo_loggato = pipeline_aggregati['costo_personale_loggato'] # Usa il costo calcolato
+    pipeline_costo_loggato = pipeline_aggregati['costo_personale_loggato'] 
             
-    # --- 7. Invio dati al Template ---
     available_years = Vendita.objects.dates('data_vendita', 'year', order='DESC'); available_months = range(1, 13)
     context = {
-        'vendite_totali': vendite_totali, 'margine_totale_euro': margine_totale_euro, 'margine_totale_percent': margine_totale_percent,
+        'vendite_totali': vendite_totali, 'margine_totale_euro': margine_lordo_euro, 'margine_totale_percent': margine_totale_percent,
         'utile_operativo_ebit': utile_operativo_ebit, 'scontrino_medio': scontrino_medio, 'perc_incidenza_servizi': perc_incidenza_servizi,
         'perc_finanziamenti': perc_finanziamenti, 'numero_resi': aggregati_vendite['numero_resi'], 'numero_vendite': numero_vendite,
         'pipeline_valore': pipeline_valore, 'pipeline_numero': pipeline_numero, 'pipeline_costo_loggato': pipeline_costo_loggato,
@@ -316,7 +297,7 @@ def dashboard(request):
 
 @login_required
 def report_venditori(request):
-    # ... (Vista 'report_venditori' invariata) ...
+    # ... (Il resto della vista report_venditori è invariato) ...
     selected_year = request.GET.get('anno'); selected_month = request.GET.get('mese')
     vendite_qs = Vendita.objects.all(); filter_title = "Totale Complessivo" 
     if selected_year: vendite_qs = vendite_qs.filter(data_vendita__year=selected_year); filter_title = f"Anno {selected_year}"
@@ -341,6 +322,7 @@ def report_venditori(request):
 # --- VISTE KANBAN ---
 @login_required
 def kanban_board(request):
+    # ... (Il resto della vista kanban_board è invariato) ...
     stati_kanban = [
         (Trattativa.STATO_LEAD, '1. Lead/Contatto'), (Trattativa.STATO_APPUNTAMENTO, '2. Appuntamento Fissato'),
         (Trattativa.STATO_PROGETTAZIONE, '3. Progettazione'), (Trattativa.STATO_PREVENTIVO, '4. Preventivo Inviato'),
@@ -365,7 +347,7 @@ def kanban_board(request):
 @login_required
 @require_POST
 def move_trattativa(request):
-    # ... (Vista 'move_trattativa' invariata) ...
+    # ... (Il resto della vista move_trattativa è invariato) ...
     try:
         trattativa_id = request.POST.get('id'); nuovo_stato = request.POST.get('stato')
         trattativa = get_object_or_404(Trattativa, pk=trattativa_id)
@@ -379,6 +361,7 @@ def move_trattativa(request):
 
 @login_required
 def chiudi_trattativa_modal(request, trattativa_id):
+    # ... (Il resto della vista chiudi_trattativa_modal è invariato) ...
     trattativa = get_object_or_404(Trattativa, pk=trattativa_id)
     if request.method == 'POST':
         form = TrattativaVintaForm(request.POST)
@@ -399,23 +382,36 @@ def chiudi_trattativa_modal(request, trattativa_id):
     return render(request, 'gestione/partials/modal_chiudi_vinto.html', {'form': form, 'trattativa': trattativa})
 
 
+# --- VISTA report_attivita (CORRETTA) ---
 @login_required
 def report_attivita(request):
-    costo_per_commerciale = User.objects.filter(attivita__isnull=False).distinct().annotate(
-        ore_totali=Coalesce(Sum('attivita__tempo_dedicato_ore'), Decimal(0.0)),
-        costo_totale=Coalesce(get_costo_personale_query(), Decimal(0.0))
+    # --- CORREZIONE QUI ---
+    # Sostituiamo "costo_per_commerciale" con "costo_per_ruolo"
+    costo_per_ruolo = RuoloCosto.objects.filter(attivita__isnull=False).distinct().annotate(
+        ore_totali=Coalesce(Sum('attivita__tempo_dedicato_ore'), Decimal(0.0))
+    ).annotate(
+        # Calcoliamo il costo totale moltiplicando le ore per il costo orario del ruolo
+        costo_totale=F('ore_totali') * F('costo_orario')
     ).order_by('-costo_totale')
+    # --- FINE CORREZIONE ---
+
     stati_attivi = [Trattativa.STATO_LEAD, Trattativa.STATO_APPUNTAMENTO, Trattativa.STATO_PROGETTAZIONE, Trattativa.STATO_PREVENTIVO, Trattativa.STATO_CONSEGNA, Trattativa.STATO_MONTAGGIO]
+    
+    # Questa query è corretta perché get_costo_personale_query usa 'attivita__ruolo__costo_orario'
     costo_per_trattativa_attiva = Trattativa.objects.filter(stato__in=stati_attivi, attivita__isnull=False).distinct().annotate(
         ore_totali=Coalesce(Sum('attivita__tempo_dedicato_ore'), Decimal(0.0)),
-        costo_totale=Coalesce(get_costo_personale_query(), Decimal(0.0))
+        costo_totale=Coalesce(get_costo_personale_query(), Decimal(0.0)) # Questa funzione è corretta
     ).select_related('commerciale').order_by('-costo_totale')
+    
     costo_trattative_perse = Attivita.objects.filter(trattativa__stato=Trattativa.STATO_PERSO).aggregate(costo_totale_perso=Coalesce(get_costo_attivita_query(), Decimal(0.0)))['costo_totale_perso']
     costo_trattative_vinte = Attivita.objects.filter(trattativa__stato=Trattativa.STATO_VINTO).aggregate(costo_totale_vinte=Coalesce(get_costo_attivita_query(), Decimal(0.0)))['costo_totale_vinte']
+    
     context = {
-        'active_page': 'report_attivita', 'costo_per_commerciale': costo_per_commerciale,
+        'active_page': 'report_attivita', 
+        'costo_per_ruolo': costo_per_ruolo, # <-- Nome variabile cambiato
         'costo_per_trattativa_attiva': costo_per_trattativa_attiva,
-        'costo_trattative_perse': costo_trattative_perse, 'costo_trattative_vinte': costo_trattative_vinte,
+        'costo_trattative_perse': costo_trattative_perse, 
+        'costo_trattative_vinte': costo_trattative_vinte,
     }
     return render(request, 'gestione/report_attivita.html', context)
 
@@ -435,10 +431,12 @@ def trattativa_dettaglio(request, trattativa_id):
     else:
         form_dati = TrattativaDettaglioForm(instance=trattativa)
     
-    attivita = trattativa.attivita.all().order_by('-data_attivita')
+    # Query corretta (usa 'ruolo')
+    attivita = trattativa.attivita.all().select_related('categoria', 'ruolo').order_by('-data_attivita')
+    
     messaggi_chat = trattativa.messaggi_chat.all().select_related('utente').order_by('timestamp')
     
-    # Calcola l'analisi economica usando i dati della trattativa
+    # Calcolo corretto (usa 'get_costo_personale_trattativa')
     costo_personale_trattativa = get_costo_personale_trattativa(trattativa_id)
     ricavo_servizi_trattativa = attivita.aggregate(total=Coalesce(Sum('prezzo_vendita_attivita'), Decimal(0.0)))['total']
     
@@ -456,7 +454,6 @@ def trattativa_dettaglio(request, trattativa_id):
         'active_page': 'kanban', 'trattativa': trattativa, 'form_dati': form_dati,
         'attivita_lista': attivita, 'messaggi_chat': messaggi_chat,
         'attivita_form': attivita_form, 'chat_form': chat_form,
-        # Dati per la card "Analisi Economica"
         'valore_totale_stimato': valore_totale,
         'costo_personale_trattativa': costo_personale_trattativa,
         'ricavo_servizi_trattativa': ricavo_servizi_trattativa,
@@ -466,15 +463,16 @@ def trattativa_dettaglio(request, trattativa_id):
     return render(request, 'gestione/trattativa_dettaglio.html', context)
 
 
+# --- VISTA add_attivita (SEMPLIFICATA) ---
 @login_required
 def add_attivita(request, trattativa_id):
     trattativa = get_object_or_404(Trattativa, pk=trattativa_id)
+    
     if request.method == 'POST':
         form = AttivitaForm(request.POST)
         if form.is_valid():
             form.save(commit=False)
             form.instance.trattativa = trattativa
-            # 'eseguita_da' è ora nel form
             form.save()
             messages.success(request, "Attività loggata con successo!")
             headers = {'HX-Refresh': 'true'}
@@ -482,16 +480,132 @@ def add_attivita(request, trattativa_id):
         else:
             messages.error(request, "Errore nel form attività.")
             return render(request, 'gestione/partials/_modal_add_attivita.html', {
-                'trattativa': trattativa, 'attivita_form_errors': form 
+                'trattativa': trattativa, 
+                'attivita_form_errors': form.errors, 
+                'attivita_form': form,         
+                'is_editing': False
             }, status=400)
+    
+    # --- LOGICA GET ---
     else: 
         form = AttivitaForm(initial={
             'data_attivita': datetime.date.today(),
-            'eseguita_da': request.user
         })
+        
         return render(request, 'gestione/partials/_modal_add_attivita.html', {
-            'trattativa': trattativa, 'attivita_form': form
+            'trattativa': trattativa, 
+            'attivita_form': form,
+            'is_editing': False
         })
+
+# --- VISTA: EDIT ATTIVITA (SEMPLIFICATA) ---
+@login_required
+def edit_attivita(request, attivita_id):
+    attivita = get_object_or_404(Attivita, pk=attivita_id)
+    trattativa = attivita.trattativa
+    
+    if request.method == 'POST':
+        form = AttivitaForm(request.POST, instance=attivita)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Attività aggiornata con successo!")
+            return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
+        else:
+            messages.error(request, "Errore nel form attività.")
+            return render(request, 'gestione/partials/_modal_add_attivita.html', {
+                'trattativa': trattativa,
+                'attivita_form': form,
+                'attivita_form_errors': form.errors,
+                'is_editing': True
+            }, status=400)
+    
+    # --- LOGICA GET ---
+    else:
+        form = AttivitaForm(instance=attivita)
+        return render(request, 'gestione/partials/_modal_add_attivita.html', {
+            'trattativa': trattativa,
+            'attivita_form': form,
+            'is_editing': True
+        })
+
+# --- VISTA: DELETE ATTIVITA ---
+@login_required
+@require_POST
+def delete_attivita(request, attivita_id):
+    try:
+        attivita = get_object_or_404(Attivita, pk=attivita_id)
+        attivita.delete()
+        messages.success(request, "Attività eliminata con successo.")
+        # Ricarica l'intera pagina per aggiornare i totali
+        return HttpResponse(status=204, headers={'HX-Refresh': 'true'})
+    except Exception as e:
+        messages.error(request, f"Errore durante l'eliminazione: {e}")
+        return HttpResponse(status=400, headers={'HX-Refresh': 'true'})
+
+
+# --- NUOVA VISTA PER CALCOLO COSTI LIVE (HTMX) ---
+@login_required
+def calcola_costi_attivita(request):
+    
+    # 1. Recupera i dati inviati da HTMX
+    ruolo_id = request.GET.get('ruolo')
+    ore_str = request.GET.get('tempo_dedicato_ore', '0').replace(',', '.')
+    prezzo_str = request.GET.get('prezzo_vendita_attivita', '0').replace(',', '.')
+
+    costo_orario = Decimal(0.0)
+    costo_totale = Decimal(0.0)
+    ore = Decimal(0.0)
+    prezzo_vendita = Decimal(0.0)
+    
+    show_alert = False
+    alert_message = ""
+
+    # 2. Cerca il costo del ruolo
+    if ruolo_id:
+        try:
+            ruolo = RuoloCosto.objects.get(pk=ruolo_id)
+            if ruolo.costo_orario is not None:
+                costo_orario = ruolo.costo_orario
+        except RuoloCosto.DoesNotExist:
+            pass # costo_orario rimane 0
+
+    # 3. Fai i calcoli
+    try:
+        ore = Decimal(ore_str) if ore_str else Decimal(0.0)
+    except Exception:
+        ore = Decimal(0.0)
+        
+    try:
+        prezzo_vendita = Decimal(prezzo_str) if prezzo_str else Decimal(0.0)
+    except Exception:
+        prezzo_vendita = Decimal(0.0)
+
+    costo_totale = ore * costo_orario
+
+    # 4. Controlla il margine (logica degli alert)
+    if costo_totale > 0:
+        impostazioni = ImpostazioniGenerali.load()
+        soglia_margine = impostazioni.soglia_alert_margine_servizio / Decimal(100.0)
+        
+        prezzo_minimo = costo_totale * (1 + soglia_margine)
+
+        if prezzo_vendita <= 0:
+            show_alert = True
+            alert_message = f"(Stai offrendo un servizio a €0.00 che costa € {costo_totale:.2f})"
+        elif prezzo_vendita < prezzo_minimo:
+            show_alert = True
+            alert_message = f"(Prezzo min. suggerito: € {prezzo_minimo:.2f})"
+            
+    context = {
+        'costo_orario': costo_orario,
+        'costo_totale': costo_totale,
+        'show_alert': show_alert,
+        'alert_message': alert_message,
+    }
+    
+    # 5. Restituisci il partial template
+    return render(request, 'gestione/partials/_partial_calcolo_costi.html', context)
+
 
 @login_required
 @require_POST

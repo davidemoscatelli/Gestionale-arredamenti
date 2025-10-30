@@ -1,7 +1,7 @@
 from django import forms
 from .models import (
     Vendita, CategoriaMerceologica, CategoriaServizio, Trattativa, 
-    Attivita, MessaggioChat, StatMensile
+    Attivita, MessaggioChat, StatMensile, RuoloCosto
 )
 from django.contrib.auth.models import User
 import datetime
@@ -28,13 +28,12 @@ class AttivitaForm(forms.ModelForm):
     """
     categoria = forms.ModelChoiceField(
         label="Categoria Servizio",
-        queryset=CategoriaServizio.objects.all(), # CORRETTO
+        queryset=CategoriaServizio.objects.all(),
         required=True,
         widget=forms.Select(attrs={'class': 'form-select'}) 
     )
     descrizione = forms.CharField(label="Descrizione Attività", widget=forms.TextInput(attrs={'class': 'form-control'}))
     
-    # NUOVO CAMPO
     prezzo_vendita_attivita = forms.DecimalField(
         label="Prezzo Vendita Servizio (€)",
         initial=0.00,
@@ -44,17 +43,21 @@ class AttivitaForm(forms.ModelForm):
     
     tempo_dedicato_ore = forms.DecimalField(label="Ore Dedicate (Costo)", initial=0.5, widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.25'}))
     data_attivita = forms.DateField(initial=datetime.date.today, widget=forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}))
-    eseguita_da = forms.ModelChoiceField(
-        label="Eseguita da (Costo)",
-        queryset=User.objects.filter(is_active=True),
+    
+    # --- MODIFICA QUI ---
+    ruolo = forms.ModelChoiceField(
+        label="Eseguita da (Ruolo/Costo)",
+        queryset=RuoloCosto.objects.all(), # <-- Punta a RuoloCosto
         required=True,
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+    # --- FINE MODIFICA ---
+
     class Meta:
         model = Attivita
         fields = [
             'categoria', 'descrizione', 'prezzo_vendita_attivita',
-            'data_attivita', 'tempo_dedicato_ore', 'eseguita_da'
+            'data_attivita', 'tempo_dedicato_ore', 'ruolo' # <-- MODIFICATO (da 'eseguita_da')
         ]
 
 class MessaggioChatForm(forms.ModelForm):

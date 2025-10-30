@@ -20,15 +20,39 @@
     .kanban-cards-list::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
     .kanban-cards-list::-webkit-scrollbar-thumb { background: #ccc; border-radius: 10px; }
     .kanban-drop-zone { min-height: 10px; flex-grow: 1; }
-    .kanban-card { background-color: #ffffff; border-radius: 0.5rem; padding: 1rem 1.25rem; cursor: grab; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); transition: box-shadow 0.2s ease; margin-bottom: 1rem; border: none; }
-    .kanban-card:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); }
+    
+    /* --- MODIFICA 1: Stile Card --- */
+    .kanban-card { 
+        background-color: #ffffff; 
+        border-radius: 0.5rem; 
+        padding: 1rem 1.25rem; 
+        cursor: pointer; /* Cambiato da 'grab' a 'pointer' */
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1); 
+        transition: box-shadow 0.2s ease, border-color 0.2s ease; /* Aggiunta transizione per il bordo */
+        margin-bottom: 1rem; 
+        border: 1px solid transparent; /* Aggiunto bordo trasparente per evitare scatti in hover */
+    }
+    .kanban-card:hover { 
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1); 
+        border-color: #0d6efd; /* Bordo blu in hover */
+    }
+    /* Stile per il wrapper del link */
+    .card-link-wrapper {
+        color: inherit;
+        text-decoration: none;
+    }
+    /* --- Fine Modifica 1 --- */
+
     .kanban-card-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; color: #111827; }
     .kanban-card-subtitle { color: #6c757d; font-size: 0.85rem; margin-bottom: 0.75rem; display: flex; align-items: center; }
     .kanban-card-subtitle i { font-size: 0.9rem; margin-right: 6px; }
     .kanban-card-value { font-size: 1rem; font-weight: 500; margin-bottom: 1rem; color: #111827; }
+    
+    /* Questo non è più usato, ma lo lasciamo per sicurezza */
     .kanban-card-details-button { font-size: 0.85rem; font-weight: 600; color: #6c757d; text-decoration: none; }
     .kanban-card-details-button:hover { color: #0d6efd; }
     .kanban-card-details-button i { margin-right: 4px; }
+    
     .sortable-ghost { opacity: 0.4; background: #e2e6ea; border-radius: 0.5rem; border: 2px dashed #0d6efd; }
     .task-done { opacity: 0.6; background-color: #f8f9fa; }
     .task-done .kanban-card-title { text-decoration: line-through; color: #6c757d; }
@@ -36,6 +60,7 @@
     .fab { width: 60px; height: 60px; border-radius: 50%; background-color: #0d6efd; color: white; font-size: 28px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; text-decoration: none; transition: background-color 0.2s; }
     .fab:hover { background-color: #0b5ed7; color: white; }
     .impact-badge { font-size: 0.75rem; font-weight: 600; padding: 0.3em 0.6em; }
+    
     @media (min-width: 992px) {
         .kanban-board { display: flex; overflow-x: auto; gap: 1.5rem; align-items: flex-start; }
         .kanban-column { min-width: 320px; max-width: 320px; flex-shrink: 0; width: auto; margin-bottom: 0; max-height: 85vh; }
@@ -79,52 +104,50 @@
                  hx-params="id, stato">
             
                 {% for trattativa in colonna.trattative %}
-                <div class="kanban-card {% if trattativa.stato == 'VINTO' or trattativa.stato == 'PERSO' %}task-done{% endif %}" 
-                     id="trattativa-{{ trattativa.id }}" data-id="{{ trattativa.id }}">
-                    
-                    <div class="kanban-card-title">{{ trattativa.titolo }}</div>
-                    
-                    <div class="kanban-card-subtitle">
-                        <i class="bi bi-person-badge"></i> {{ trattativa.cliente_nome }}
-                    </div>
-                    
-                    <div class="kanban-card-value">
-                        € {{ trattativa.valore_stimato|floatformat:0|intcomma }}
-                    </div>
+                
+                
+                    <div class="kanban-card {% if trattativa.stato == 'VINTO' or trattativa.stato == 'PERSO' %}task-done{% endif %}" 
+                         id="trattativa-{{ trattativa.id }}" data-id="{{ trattativa.id }}">
+                        
+                        <div class="kanban-card-title">{{ trattativa.titolo }}</div>
+                        
+                        <div class="kanban-card-subtitle">
+                            <i class="bi bi-person-badge"></i> {{ trattativa.cliente_nome }}
+                        </div>
+                        
+                        <div class="kanban-card-value">
+                            € {{ trattativa.valore_stimato|floatformat:0|intcomma }}
+                        </div>
 
-                    <div>
-                        {% if trattativa.stato != 'VINTO' and trattativa.stato != 'PERSO' %}
-                            <div>
-                                <a href="{% url 'trattativa_dettaglio' trattativa.id %}" class="kanban-card-details-button">
-                                    <i class="bi bi-chat-dots"></i> Dettagli
-                                </a>
-                            </div>
-                            <div class="mt-2 text-end"> 
-                                {% if trattativa.valore_stimato > 0 %}
-                                    {% with perc=trattativa.margine_stimato_perc %}
-                                        {% if perc < 20 %}
-                                            <span class="badge bg-danger impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
-                                        {% elif perc < 40 %}
-                                            <span class="badge bg-warning text-dark impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
-                                        {% else %}
-                                            <span class="badge bg-success impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
-                                        {% endif %}
-                                    {% endwith %}
-                                {% else %}
-                                    <span class="badge bg-light text-dark border impact-badge">N/D</span>
-                                {% endif %}
-                            </div>
-                        {% else %}
-                            <div class="mt-2 text-end">
-                                {% if trattativa.valore_stimato > 0 %}
-                                    <span class="badge bg-light text-dark border impact-badge">Margine: {{ trattativa.margine_stimato_perc|floatformat:1 }}%</span>
-                                {% endif %}
-                            </div>
-                        {% endif %}
-                    </div>
+                        <div>
+                            {% if trattativa.stato != 'VINTO' and trattativa.stato != 'PERSO' %}
+                                
+                                <div class="mt-2 text-end"> 
+                                    {% if trattativa.valore_stimato > 0 %}
+                                        {% with perc=trattativa.margine_stimato_perc %}
+                                            {% if perc < 20 %}
+                                                <span class="badge bg-danger impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                            {% elif perc < 40 %}
+                                                <span class="badge bg-warning text-dark impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                            {% else %}
+                                                <span class="badge bg-success impact-badge">Margine: {{ perc|floatformat:1 }}%</span>
+                                            {% endif %}
+                                        {% endwith %}
+                                    {% else %}
+                                        <span class="badge bg-light text-dark border impact-badge">N/D</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <div class="mt-2 text-end">
+                                    {% if trattativa.valore_stimato > 0 %}
+                                        <span class="badge bg-light text-dark border impact-badge">Margine: {{ trattativa.margine_stimato_perc|floatformat:1 }}%</span>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
 
-                </div>
-                {% endfor %}
+                    </div>
+               {% endfor %}
                 <div class="kanban-drop-zone"></div>
             </div>
         </div>

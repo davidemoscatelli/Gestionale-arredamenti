@@ -114,7 +114,7 @@
             <div class="card mb-4" id="analisi-economica">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     Analisi Economica Stimata
-                    {% if trattativa.valore_stimato > 0 %}
+                    {% if trattativa.valore_stimato > 0 or ricavo_servizi_trattativa > 0 %}
                         {% if margine_stimato_perc < 20 %}
                             <span class="badge bg-danger">Margine Basso</span>
                         {% elif margine_stimato_perc < 40 %}
@@ -127,19 +127,23 @@
                 <div class="card-body">
                     <ul class="list-group list-group-flush">
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Valore Vendita (A)</span>
+                            <span>Valore Prodotto (A)</span>
                             <strong class="fs-5">€ {{ trattativa.valore_stimato|floatformat:2|intcomma }}</strong>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Costo Materiali (B)</span>
+                            <span>Ricavo Servizi (B)</span>
+                            <strong class="fs-5">(+) € {{ ricavo_servizi_trattativa|floatformat:2|intcomma }}</strong>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>Costo Materiali (C)</span>
                             <span class="text-danger">(-) € {{ trattativa.costo_materiali_stimato|floatformat:2|intcomma }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>Costo Personale (C)</span>
+                            <span>Costo Personale (D)</span>
                             <span class="text-danger">(-) € {{ costo_personale_trattativa|floatformat:2|intcomma }}</span>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
-                            <strong>Margine Lordo Stimato (A-B-C)</strong>
+                            <strong>Margine Lordo Stimato (A+B-C-D)</strong>
                             <strong class="fs-5 text-primary">€ {{ margine_stimato_euro|floatformat:2|intcomma }}</strong>
                         </li>
                         <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
@@ -155,7 +159,9 @@
                     Log Attività
                     <button class="btn btn-primary btn-sm"
                             hx-get="{% url 'add_attivita' trattativa.id %}"
-                            hx-target="#modal-container-content">
+                            hx-target="#modal-container-content"
+                            data-bs-toggle="modal" 
+                            data-bs-target="#htmx-modal">
                         <i class="bi bi-plus-lg"></i> Aggiungi Attività
                     </button>
                 </div>
@@ -195,4 +201,6 @@
             </div>
         </div>
         
-    </div> </div> {% endblock %}
+    </div>
+</div>
+{% endblock %}

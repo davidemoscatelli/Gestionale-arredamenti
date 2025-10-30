@@ -1,26 +1,54 @@
 {% load humanize %}
 
-<div id="lista-attivita-container">
-    
-    {% if attivita_lista %}
-        <ul class="list-group list-group-flush" id="lista-attivita">
-        {% for att in attivita_lista %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>{{ att.descrizione }}</strong>
-                    <small class="d-block text-muted">
-                        {{ att.data_attivita|date:"d M Y" }} - 
-                        Loggato da: {{ att.eseguita_da.username|default:"Sistema" }}
-                        {% if att.categoria %}
-                            <span class="badge bg-light text-dark border ms-1">{{ att.categoria.nome }}</span>
-                        {% endif %}
-                    </small>
-                </div>
-                <span class="badge bg-secondary rounded-pill">{{ att.tempo_dedicato_ore|floatformat:1 }} h</span>
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p class="text-center text-muted mt-3">Nessuna attività registrata.</p>
-    {% endif %}
+<div class="table-responsive">
+    <table class="table table-sm table-hover" id="tabella-attivita">
+        <thead class="table-light">
+            <tr>
+                <th>Data</th>
+                <th>Categoria</th>
+                <th>Descrizione</th>
+                <th class="text-end">Ore</th>
+                <th class="text-end">Prezzo Vend.</th>
+                <th>Eseguita da (ruolo)</th>
+                <th></th> </tr>
+        </thead>
+        <tbody>
+            {% for att in attivita_lista %}
+            <tr id="attivita-row-{{ att.id }}">
+                <td>{{ att.data_attivita|date:"d/m/Y" }}</td>
+                <td>{{ att.categoria.nome }}</td>
+                <td>{{ att.descrizione }}</td>
+                <td class="text-end">{{ att.tempo_dedicato_ore|floatformat:2 }}h</td>
+                <td class="text-end">€ {{ att.prezzo_vendita_attivita|floatformat:2|intcomma }}</td>
+                <td>{{ att.ruolo.nome|default:"-" }}</td> <td class="text-end">
+                <td class="text-end">
+                    <button 
+                        class="btn btn-outline-primary btn-sm py-0 px-1"
+                        hx-get="{% url 'edit_attivita' att.id %}"
+                        hx-target="#modal-container-content"
+                        data-bs-toggle="modal" 
+                        data-bs-target="#htmx-modal"
+                        title="Modifica Attività">
+                        <i class="bi bi-pencil-fill"></i>
+                    </button>
+                    
+                    <button 
+                        class="btn btn-outline-danger btn-sm py-0 px-1"
+                        hx-post="{% url 'delete_attivita' att.id %}"
+                        hx-confirm="Sei sicuro di voler eliminare questa attività? L'azione è irreversibile."
+                        hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+                        hx-target="body" 
+                        hx-swap="none"
+                        title="Elimina Attività">
+                        <i class="bi bi-trash-fill"></i>
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="text-center text-muted">Nessuna attività loggata.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
 </div>

@@ -1,10 +1,12 @@
+# gestione/models.py
+
 from django.db import models
 from django.conf import settings
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from django.db.models.signals import post_save 
 from django.dispatch import receiver 
-import datetime # <-- ECCO LA CORREZIONE
+import datetime 
 
 # --- PROFILO UTENTE (PER COSTO ORARIO) ---
 class ProfiloUtente(models.Model):
@@ -30,6 +32,29 @@ def create_or_update_user_profile(sender, instance, created, **kwargs):
                 profilo.save() 
         except ProfiloUtente.DoesNotExist:
              ProfiloUtente.objects.create(utente=instance)
+
+
+# --- NUOVO MODELLO PER COSTI RUOLO (SPOSTATO QUI) ---
+class RuoloCosto(models.Model):
+    """
+    Rappresenta un ruolo o una squadra con un costo orario standard.
+    Es. Montatore, Progettista, Commerciale, Squadra Esterna, ecc.
+    """
+    nome = models.CharField(max_length=100, unique=True, verbose_name="Nome Ruolo/Squadra")
+    costo_orario = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=25.00, 
+        verbose_name="Costo Orario Standard (€)"
+    )
+
+    class Meta:
+        verbose_name = "Ruolo (Costo Orario)"
+        verbose_name_plural = "Ruoli (Costi Orari)"
+        ordering = ['nome']
+
+    def __str__(self):
+        return f"{self.nome} (€{self.costo_orario}/ora)"
 
 
 # --- MODELLI DI BUSINESS ---
@@ -169,7 +194,18 @@ class Trattativa(models.Model):
 
 class Attivita(models.Model):
     trattativa = models.ForeignKey(Trattativa, on_delete=models.CASCADE, related_name="attivita", verbose_name="Trattativa di Riferimento")
-    eseguita_da = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="Eseguita da")
+    
+    # --- MODIFICA QUI ---
+    # Ora 'RuoloCosto' è definito *sopra* questa classe, quindi Python lo troverà
+    ruolo = models.ForeignKey(
+        RuoloCosto,
+        on_delete=models.SET_NULL, # Se elimini un ruolo, non eliminare l'attività
+        null=True,
+        blank=False, # Vogliamo che sia obbligatorio
+        verbose_name="Ruolo (Costo)"
+    )
+    # --- FINE MODIFICA ---
+    
     categoria = models.ForeignKey(
         CategoriaServizio, 
         on_delete=models.SET_NULL,
@@ -203,3 +239,39 @@ class MessaggioChat(models.Model):
         ordering = ['timestamp'] 
     def __str__(self):
         return f"Messaggio di {self.utente} su {self.trattativa.titolo}"
+
+# --- MODELLO IMPOSTAZIONI SPOSTATO QUI (O RIMOSSO SE NON PIÙ NECESSARIO) ---
+# L'abbiamo rimosso perché il calcolo live è stato tolto.
+# Se lo vuoi tenere, assicurati che sia definito qui, prima di essere usato.
+class ImpostazioniGenerali(models.Model):
+    """
+    Un modello Singleton (può esistere solo 1 riga) per le impostazioni globali.
+    Viene creato automaticamente con PK=1.
+    """
+    soglia_alert_margine_servizio = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=20.00, 
+        verbose_name="Soglia Alert Margine Servizi (%)",
+        help_text="Es. 20. Se il prezzo di un servizio è sotto [Costo Personale + 20%], mostra un alert."
+    )
+
+    class Meta:
+        verbose_name = "Impostazioni Generali"
+        verbose_name_plural = "Impostazioni Generali"
+
+    def __str__(self):
+        return "Impostazioni Generali"
+
+    def save(self, *args, **kwargs):
+        # Forza l'esistenza di una sola riga con PK=1
+        self.pk = 1 
+        super(ImpostazioniGenerali, self).save(*args, **kwargs)
+        # Elimina eventuali altre righe create per errore
+        ImpostazioniGenerali.objects.exclude(pk=1).delete()
+
+    @classmethod
+    def load(cls):
+        # Metodo helper per caricare l'unica istanza
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj

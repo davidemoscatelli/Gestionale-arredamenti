@@ -41,6 +41,8 @@ urlpatterns = [
     # --- NUOVI URL (PUNTO 17) ---
     path('lista/', views.trattativa_lista, name='trattativa_lista'),
     path('esporta-excel/', views.esporta_trattative_excel, name='esporta_trattative_excel'),
-    
     path('accounts/', include('django.contrib.auth.urls')),
+    path('attivita/<int:attivita_id>/modifica/', views.edit_attivita, name='edit_attivita'),
+    path('attivita/<int:attivita_id>/elimina/', views.delete_attivita, name='delete_attivita'),
+    path('attivita/calcola-costi/', views.calcola_costi_attivita, name='calcola_costi_attivita'),
 ]

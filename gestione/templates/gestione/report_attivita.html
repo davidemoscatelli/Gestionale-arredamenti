@@ -1,113 +1,92 @@
 {% extends 'gestione/base.html' %}
+{% load humanize %}
 {% load bootstrap5 %}
-{% load humanize %} 
 
-{% block title %}Report Attività - Gestione Arredo{% endblock %}
+{% block title %}Report Attività{% endblock %}
 
 {% block content %}
-
 <div class="container pt-4">
-
-    <h1 class="mb-4 h4">Report Costo Personale per Attività</h1>
-
-    <div class="row mb-4">
-        <div class="col-md-6 mb-3">
-            <div class="card text-center text-bg-danger">
-                <div class="card-header">Costo Personale su Trattative PERSE</div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3">Report Costi Attività</h1>
+    </div>
+    
+    <div class="row">
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">Costi Totali per Ruolo</div>
                 <div class="card-body">
-                    <h3 class="card-title">€ {{ costo_trattative_perse|floatformat:2|intcomma }}</h3>
-                    <p class="card-text">Costo totale investito senza ritorno diretto</p>
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Ruolo</th>
+                                    <th class="text-end">Ore Totali</th>
+                                    <th class="text-end">Costo Totale</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for ruolo in costo_per_ruolo %}
+                                <tr>
+                                    <td>{{ ruolo.nome }} (€{{ ruolo.costo_orario|floatformat:2 }}/h)</td>
+                                    <td class="text-end">{{ ruolo.ore_totali|floatformat:2 }}h</td>
+                                    <td class="text-end">€ {{ ruolo.costo_totale|floatformat:2|intcomma }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="3" class="text-center text-muted">Nessun costo per ruolo.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-6 mb-3">
-            <div class="card text-center text-bg-success">
-                <div class="card-header">Costo Personale su Trattative VINTE</div>
-                <div class="card-body">
-                    <h3 class="card-title">€ {{ costo_trattative_vinte|floatformat:2|intcomma }}</h3>
-                    <p class="card-text">Costo totale investito su vendite concluse</p>
-                </div>
+        
+        <div class="col-lg-6 mb-4">
+            <div class="card">
+                <div class="card-header">Costi Trattative Chiuse</div>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Costo Totale su Trattative Vinte
+                        <span class="badge bg-success rounded-pill fs-6">€ {{ costo_trattative_vinte|floatformat:2|intcomma }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Costo Totale su Trattative Perse
+                        <span class="badge bg-danger rounded-pill fs-6">€ {{ costo_trattative_perse|floatformat:2|intcomma }}</span>
+                    </li>
+                </ul>
             </div>
         </div>
     </div>
-
-    <div class="row">
-        
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    Costo Totale per Commerciale (Tutte le attività)
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover mb-0 small">
-                        <thead>
-                            <tr>
-                                <th>Commerciale</th>
-                                <th class="text-end">Ore Totali</th>
-                                <th class="text-end">Costo Totale (€)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for utente in costo_per_commerciale %}
-                            <tr>
-                                <td>
-                                    <strong>{{ utente.first_name }} {{ utente.last_name }}</strong>
-                                    <small class="d-block text-muted">@{{ utente.username }}</small>
-                                </td>
-                                <td class="text-end">{{ utente.ore_totali|floatformat:1 }} h</td>
-                                <td class="text-end"><strong>€ {{ utente.costo_totale|floatformat:2|intcomma }}</strong></td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="3" class="text-center">Nessuna attività registrata.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+    
+    <div class="card">
+        <div class="card-header">Costi per Trattativa (Ancora Aperte)</div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Trattativa</th>
+                            <th>Commerciale</th>
+                            <th class="text-end">Ore Totali</th>
+                            <th class="text-end">Costo Personale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for trattativa in costo_per_trattativa_attiva %}
+                        <tr>
+                            <td><a href="{% url 'trattativa_dettaglio' trattativa.id %}">{{ trattativa.titolo }}</a></td>
+                            <td>{{ trattativa.commerciale.username|default:"-" }}</td>
+                            <td class="text-end">{{ trattativa.ore_totali|floatformat:2 }}h</td>
+                            <td class="text-end">€ {{ trattativa.costo_totale|floatformat:2|intcomma }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted">Nessun costo loggato su trattative aperte.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    Costo per Trattativa Attiva (Top 10)
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover mb-0 small">
-                        <thead>
-                            <tr>
-                                <th>Trattativa</th>
-                                <th>Stato</th>
-                                <th class="text-end">Ore</th>
-                                <th class="text-end">Costo (€)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for trattativa in costo_per_trattativa_attiva|slice:":10" %}
-                            <tr>
-                                <td>
-                                    <strong>{{ trattativa.titolo }}</strong>
-                                    <small class="d-block text-muted">{{ trattativa.cliente_nome }}</small>
-                                </td>
-                                <td><span class="badge bg-secondary">{{ trattativa.get_stato_display|cut:"1. "|cut:"2. "|cut:"3. "|cut:"4. "|cut:"5. "|cut:"6. " }}</span></td>
-                                <td class="text-end">{{ trattativa.ore_totali|floatformat:1 }} h</td>
-                                <td class="text-end"><strong>€ {{ trattativa.costo_totale|floatformat:2|intcomma }}</strong></td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center">Nessuna attività registrata su trattative attive.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                 {% if costo_per_trattativa_attiva|length > 10 %}
-                 <div class="card-footer text-muted text-center small">
-                     Mostrate le prime 10 trattative per costo registrato.
-                 </div>
-                 {% endif %}
-            </div>
-        </div>
-
-    </div> </div> {% endblock %}
+    </div>
+    
+</div>
+{% endblock %}

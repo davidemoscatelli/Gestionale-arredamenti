@@ -1,26 +1,70 @@
 {% load bootstrap5 %}
 
-<form hx-post="{% url 'add_attivita' trattativa.id %}" 
-      hx-target="#modal-container-content">
+{% if is_editing %}
+    <form hx-post="{% url 'edit_attivita' attivita_form.instance.id %}" 
+          hx-target="#modal-container-content" 
+          hx-swap="innerHTML"
+          id="attivita-form">
     {% csrf_token %}
-    
     <div class="modal-header">
-        <h5 class="modal-title">Logga Nuova Attività</h5>
+        <h5 class="modal-title">Modifica Attività</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
     </div>
-    
-    <div class="modal-body">
-        <p>Registra il tempo speso per **{{ trattativa.titolo }}**.</p>
-        
-        {% bootstrap_form attivita_form_errors|default:attivita_form %}
-        
-        <p class="text-muted small mt-3">
-            L'attività sarà registrata a nome tuo ({{ request.user.username }}).
-        </p>
+{% else %}
+    <form hx-post="{% url 'add_attivita' trattativa.id %}" 
+          hx-target="#modal-container-content" 
+          hx-swap="innerHTML"
+          id="attivita-form">
+    {% csrf_token %}
+    <div class="modal-header">
+        <h5 class="modal-title">Logga Attività per: {{ trattativa.titolo }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
     </div>
-    
+{% endif %}
+
+    <div class="modal-body">
+        
+        {% if attivita_form_errors %}
+            <div class="alert alert-danger">
+                <strong>Errore:</strong> Controlla i campi qui sotto.
+                {% for field, errors in attivita_form_errors.items %}
+                    {% for error in errors %}
+                        <div>- {{ field|title }}: {{ error }}</div>
+                    {% endfor %}
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div hx-get="{% url 'calcola_costi_attivita' %}"
+             hx-trigger="change from:#{{ attivita_form.ruolo.id_for_label }}, change from:#{{ attivita_form.tempo_dedicato_ore.id_for_label }}, change from:#{{ attivita_form.prezzo_vendita_attivita.id_for_label }}"
+             hx-target="#controllo-costi-container"
+             hx-swap="innerHTML"
+             hx-include="#attivita-form">
+            
+            {% bootstrap_form attivita_form %}
+        
+        </div>
+        
+        <hr>
+
+        <div class="card bg-light border-0 mt-3">
+            <div class="card-body" id="controllo-costi-container">
+                <div hx-get="{% url 'calcola_costi_attivita' %}?ruolo={{ attivita_form.ruolo.value|default_if_none:'' }}&tempo_dedicato_ore={{ attivita_form.tempo_dedicato_ore.value|default_if_none:'0' }}&prezzo_vendita_attivita={{ attivita_form.prezzo_vendita_attivita.value|default_if_none:'0' }}"
+                     hx-trigger="load"
+                     hx-target="this"
+                     hx-swap="innerHTML">
+                    <span class="text-muted small">Caricamento calcolatore...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
     <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
-        <button type="submit" class="btn btn-primary">Salva Attività</button>
+        {% if is_editing %}
+             <button type="submit" class="btn btn-primary">Salva Modifiche</button>
+        {% else %}
+             <button type="submit" class="btn btn-primary">Salva Attività</button>
+        {% endif %}
     </div>
 </form>

@@ -1,0 +1,25 @@
+<div classs="row">
+    <div class="col-12">
+        <small>
+            Costo Orario Ruolo: 
+            <strong id="costo-orario-display" class="text-primary">€ {{ costo_orario|floatformat:2|default:"0.00" }}</strong>
+        </small>
+    </div>
+    <div class="col-12">
+        <small>
+            Costo Personale Totale (Ore * Costo): 
+            <strong id="costo-personale-calcolato" class="text-primary fs-6">€ {{ costo_totale|floatformat:2|default:"0.00" }}</strong>
+        </small>
+    </div>
+</div>
+
+{% if show_alert %}
+<div id="alert-margine" class="alert alert-warning p-2 mt-2">
+    <small>
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <strong>Attenzione:</strong> Il margine è basso!
+        <br>
+        {{ alert_message }}
+    </small>
+</div>
+{% endif %}
